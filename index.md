@@ -12,9 +12,9 @@ The K-mer database (.kdb) is a file format and command-line utility (CLI) for ac
 
 .kdb is based on the block GNU-zip file (bgzf) standard. Each .kdb file has a header or metadata section, much like .bam files. It is essentially a tab-delimited format with the last column unstructured for k-mer specific metadata. Input files and total k-mer counts are stored in the metadata block at the top of the file
 
-Please visit the [Install](#/install) page for details on installation.
+Please visit the [Install](/installation) page for details on installation.
 
-See the commands in the [Usage](#/usage) section for an idea of what functionality is built in to kdb.
+See the commands in the [Usage](/quickstart#usage) section for an idea of what functionality is built in to kdb.
 
 See the original blog post on the concept [here](https://matthewralston.github.io/blog/kmer-database-format-part-1).
 

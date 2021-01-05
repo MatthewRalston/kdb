@@ -197,15 +197,15 @@ Now you would like to cluster your count matrix, perhaps after reducing dimensio
 
 ```bash
 # You may supply any arbitrary count tsv to cluster, and it will run that directly.
->./bin/kdb cluster -k 3 example.tsv
+>./bin/kdb kmeans -k 3 sklearn example.tsv
 
 # Alternatively, you may pipe the result from kdb matrix directly to kdb cluster.
 # The matrix command will not produce PCA reduced dimension matrix unless the -n parameter
 # is identified from the elbow graph it will produce as a side effect.
->./bin/kdb matrix PCA -n 3 test/data/*.$K.kdb | ./bin/kdb cluster -k 3
+>./bin/kdb matrix PCA -n 3 test/data/*.$K.kdb | ./bin/kdb kmeans -k 3 sklearn
 
 # Alternatively, t-SNE may be used to project the data into 2 dimensions for visualization.
->./bin/kdb matrix tSNE -n 2 test/data/*.$K.kdb | ./bin/kdb cluster -k 3
+>./bin/kdb matrix tSNE -n 2 test/data/*.$K.kdb | ./bin/kdb cluster -k 3 sklearn
 ```
 
 ## kdb rarefy
@@ -221,13 +221,23 @@ Suppose you want supply a normalized matrix directly to [ecopy](https://github.c
 >./bin/kdb matrix Unnormalized test/data/*.$K.kdb | ./bin/kdb rarefy
 ```
 
+## kdb hierarchical
+
+Now you might want to use hierarchical clustering on a distance matrix for example.
+
+```bash
+# You may run the distance command with either direct kdb input or a count matrix
+./bin/kdb distance spearman test/data/*.$K.kdb | ./bin/kdb hierarchical
+./bin/kdb matrix Normalized test/data/*.%K.kdb | ./bin/kdb distance spearman [ /dev/stdin | STDIN ] | ./bin/kdb hierarchical
+```
+
 
 # Documentation
 
 
 Documentation for the (sub)module can be found here: [https://kdb.readthedocs.io/en/stable](https://kdb.readthedocs.io/en/stable)
 
-Additionally, running the matrix, kmeans, or rarefy commands (which are arguably more complex in their usage) should be run with the DEBUG (-vv) verbosity setting on. This will yield additional information about the expected pipeline usage. That statement is echoed here.
+Additionally, running the distance, matrix, kmeans, or rarefy commands (which are arguably more complex in their usage) should be run with the DEBUG (-vv) verbosity setting on. This will yield additional information about the expected pipeline usage. That statement is echoed here.
 
 
 ```bash
@@ -245,7 +255,7 @@ The workflow is roughly as follows:
 # This command uses SQLite3 behind the scenes for on-disk k-mer counting
 # since memory is rate limiting for profile generation when dealing 
 # with biologically conventional choices of k (20 < k < 35).
-parallel 'kdb profile -k $K {} {.}.$K.kdb' ::: $(/bin/ls test/data/*.fasta.gz)
+parallel 'kdb profile -k $K {{}} {{.}}.$K.kdb' ::: $(/bin/ls test/data/*.fasta.gz)
 
 
 
@@ -266,7 +276,7 @@ parallel 'kdb profile -k $K {} {.}.$K.kdb' ::: $(/bin/ls test/data/*.fasta.gz)
 #
 #
 ##################
-# Cluster analysis
+# PCA + k-means
 ##################
 # The first step ('kdb matrix') generates one from different profiles with the same choice of k.
 # This command uses ecopy to normalize between sample k-mer total counts before PCA/tSNE.
@@ -280,18 +290,19 @@ parallel 'kdb profile -k $K {} {.}.$K.kdb' ::: $(/bin/ls test/data/*.fasta.gz)
 # The PCA/tSNE matrix will be dimReduced ($N) * N, where N is the number of samples/files/profiles.
 #
 # And finally, a k-means clustering will be done on the reduced dimensionality dataset
+# Please note the randomness parameter 'random_state=42' for sklearn's kmeans is fixed at 42.
 # Note here that the -k $K is not related to the choice of substring length 'k' for profile generation.
 # The 'kdb kmeans' command produces two figures, first is an elbow graph looking at up to N clusters.
 # This elbow graph will be written to '{1}'.
 # The second is the more typical scatterplot of the first two reduced dimensions
 # and the k-means clustering labels shown over the scatter.
 # This file will be written to '{2}'.
-kdb matrix [-n $N] [ PCA | tSNE ] test/data/*.$K.kdb | kdb kmeans -k $K
-
+kdb matrix [-n $N] [ PCA | tSNE ] test/data/*.$K.kdb | kdb kmeans -k $K sklearn
+kdb matrix [-n $N] [ PCA | tSNE ] test/data/*.$K.kdb | kdb kmeans -k $K --distance e Biopython
 #
 # If you wanted to save a matrix from kdb matrix for use on your own
 # it is recommended that you consider gzip compressing it if it is the Normalized or Unnormalized matrix
-# which we will see is used downstream in the rarefaction analytical pathway.
+# which we will see is used downstream in the rarefaction and hierarchical analytics pathways.
 #
 ##################
 # Rarefaction
@@ -299,6 +310,18 @@ kdb matrix [-n $N] [ PCA | tSNE ] test/data/*.$K.kdb | kdb kmeans -k $K
 # The Unnormalized and Normalized matrices go to ecopy's rarefy function to produce a rarefaction plot
 # This plot will be written to '{3}'.
 kdb matrix [ Unnormalized | Normalized ] test/data/*.$K.kdb | kdb rarefy
+
+
+##################
+# Hierarchical
+##################
+#
+# The Normalized matrix goes to the distance subcommand, which can use any of scipy's pdist distances
+# to form the m x m distance matrix.
+# The third step (kdb hierarchical)  is to build a dendrogram with scipy.cluster.hierarchy.
+# This final step produces a plot in addition to the tsvs produced in the prior steps,
+# which can be captured as independent steps or with tee in a pipeline.
+kdb matrix [ Normalized ] test/data/*.$K.kdb | kdb distance spearman | kdb hiearchical
 ```
 
 
