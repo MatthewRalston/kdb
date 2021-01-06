@@ -68,7 +68,7 @@ Each file can be inspected with the view and header commands detailed in the [se
 The current version on PyPI is shown above.
 
 ```bash
-pip install kdb
+pip install kmerdb
 ```
 
 See the [install](/installation) page for development install instructions.
@@ -77,12 +77,13 @@ See the [install](/installation) page for development install instructions.
 # Usage
 
 
+
 ## How to view --help
 
 Use '-h' to view detailed usage information about the subcommands
 
 ```bash
->./bin/kdb -h
+>kdb -h
 usage: kdb [-h] {profile,header,view,matrix,rarefy,cluster,distance,index} ...
 
 positional arguments:
@@ -94,9 +95,7 @@ positional arguments:
     view                View the contents of the .kdb file
     matrix              Generate a reduced-dimensionality matrix of the n *
                         4^k (sample x k-mer) data matrix.
-    rarefy              Generate rarefaction information using
-                        ecopy.diversity.rarefy for the supplied .kdb files
-    cluster             Cluster the files according to their k-mer profile
+    kmeans              Cluster the files according to their k-mer profile
     distance            Calculate various distance metrics between profiles
     index               Create a index file that can be held in memory
 
@@ -109,7 +108,7 @@ optional arguments:
 A typical workflow first requires the generation of k-mer profiles. The following command will generate multiple profiles at `$K`-mer resolution simultaneously.
 
 ```bash
-parallel './bin/kdb profile -k $K {} {.}.$K.kdb' ::: $(/bin/ls test/data/*.fasta.gz)
+parallel 'kdb profile -k $K {} {.}.$K.kdb' ::: $(/bin/ls test/data/*.fasta.gz)
 ```
 
 ## kdb view
@@ -119,9 +118,9 @@ As mentioned before under [KDB format](#kdb-is-a-file-format), the kdb file cons
 # This should display the entire header of most files
 >zcat test/data/foo.12.kdb | head -n 30 
 # This will also display just the header
->./bin/kdb header test/data/foo.12.kdb
+>kdb header test/data/foo.12.kdb
 # The -H flag includes the header in the uncompressed output
->./bin/kdb view -H test/data/foo.12.kdb
+>kdb view -H test/data/foo.12.kdb
 version: 0.0.2
 metadata_blocks: 1
 k: 12
@@ -148,13 +147,35 @@ files:
 
 ## kdb distance
 
-Suppose you want a distance matrix between profiles; this is made easy with the distance command
+Suppose you want a distance matrix between profiles; this is made easy with the distance command. The distance command supports all distance metrics used by `scipy.spatial.distance.pdist` to create the distance matrix/DataFrame and print it to STDOUT.
 
 ```bash
->./bin/kdb distance correlation test/data/*.$K.kdb
+>kdb distance -h
+usage: kdb distance [-h] [-v] [--output-delimiter OUTPUT_DELIMITER]
+                    [-d DELIMITER] [-k K]
+                    {braycurtis,canberra,chebyshev,cityblock,correlation,cosine,dice,euclidean,hamming,jaccard,jensenshannon,kulsinski,mahalanobis,matching,minkowski,rogerstanimotorusselrao,seuclidean,sokalmichener,sokalsneath,spearman,sqeuclidean,yule}
+                    <kdbfile1 kdbfile2 ...> [<kdbfile1 kdbfile2 ...> ...]
+															
+positional arguments:
+  {braycurtis,canberra,chebyshev,cityblock,correlation,cosine,dice,euclidean,hamming,jaccard,jensenshannon,kulsinski,mahalanobis,matching,minkowski,rogerstanimotorusselrao,seuclidean,sokalmichener,sokalsneath,spearman,sqeuclidean,yule}
+                            Choice of distance metric between two profiles
+  <kdbfile1 kdbfile2 ...>
+                            Two or more .kdb files
+																												
+optional arguments:
+  -h, --help            show this help message and exit
+  -v, --verbose         Prints warnings to the console by default
+  --output-delimiter OUTPUT_DELIMITER
+                        The output delimiter of the final csv/tsv to write.
+  -d DELIMITER, --delimiter DELIMITER
+                        The delimiter to use when printing the csv.
+  -k K                  The k-dimension that the files have in common
+
+>kdb distance spearman test/data/*.$K.kdb
+>kdb distance correlation test/data/*.$K.kdb # Actually the Pearson correlation coefficient
 ```
 
-The result is a symmetric matrix in tsv format with column headers formed from the filenames minus their extensions. It is presumed that to properly analyze the distance matrix, you would name the files after their sample name or their species, or some other identifying features.
+The result is a symmetric matrix in tsv format with column headers formed from the filenames minus their extensions. It is presumed that to properly analyze the distance matrix, you would name the files after their sample name or their species, or some other identifying features. This naming convention holds for the `kdb matrix` command as well.
 
 
 
@@ -163,7 +184,7 @@ The result is a symmetric matrix in tsv format with column headers formed from t
 The kdb matrix command generates the count matrix either un-normalized, normalized (via ecopy), or with PCA or t-SNE dimensionality reduction applied. Note that default behavior of PCA if -n is not specified is to generate an elbow graph for the user to pick the appropriate choice of principal components for downstream analyses. The -n parameter is passed to the n_components parameter of sklearn.decomposition.PCA, which is commonly used for PCA in Python.
 
 ```bash
->./bin/kdb matrix -h
+>kdb matrix -h
 usage: kdb matrix [-h] [-v] [-k K] [-n N] [-d DELIMITER]
                   [--perplexity PERPLEXITY]
                   {PCA,tSNE,Normalized,Unnormalized} <.kdb> [<.kdb> ...]
@@ -186,7 +207,7 @@ optional arguments:
                         The choice of the perplexity for t-SNE based
                         dimensionality reduction
 
->./bin/kdb matrix -n 3 PCA test/data/*.$K.kdb
+>kdb matrix -n 3 PCA test/data/*.$K.kdb
 ```
 
 
@@ -197,18 +218,19 @@ Now you would like to cluster your count matrix, perhaps after reducing dimensio
 
 ```bash
 # You may supply any arbitrary count tsv to cluster, and it will run that directly.
->./bin/kdb kmeans -k 3 sklearn example.tsv
+>kdb kmeans -k 3 sklearn example.tsv
 
 # Alternatively, you may pipe the result from kdb matrix directly to kdb cluster.
 # The matrix command will not produce PCA reduced dimension matrix unless the -n parameter
 # is identified from the elbow graph it will produce as a side effect.
->./bin/kdb matrix PCA -n 3 test/data/*.$K.kdb | ./bin/kdb kmeans -k 3 sklearn
+>kdb matrix PCA -n 3 test/data/*.$K.kdb | kdb kmeans -k 3 sklearn
 
 # Alternatively, t-SNE may be used to project the data into 2 dimensions for visualization.
->./bin/kdb matrix tSNE -n 2 test/data/*.$K.kdb | ./bin/kdb cluster -k 3 sklearn
+>kdb matrix tSNE -n 2 test/data/*.$K.kdb | ./bin/kdb cluster -k 3 Biopython
 ```
 
-## kdb rarefy
+<!--
+## kdb rarefy (deprecated)
 
 Suppose you want supply a normalized matrix directly to [ecopy](https://github.com/Auerilas/ecopy) for rarefaction analysis. The rarefaction command requires a tsv and may be piped directly from 'kdb matrix'.
 
@@ -220,6 +242,8 @@ Suppose you want supply a normalized matrix directly to [ecopy](https://github.c
 # Alternatively, you may pipe the result from kdb matrix directly to kdb rarefy.
 >./bin/kdb matrix Unnormalized test/data/*.$K.kdb | ./bin/kdb rarefy
 ```
+-->
+
 
 ## kdb hierarchical
 
@@ -227,8 +251,8 @@ Now you might want to use hierarchical clustering on a distance matrix for examp
 
 ```bash
 # You may run the distance command with either direct kdb input or a count matrix
-./bin/kdb distance spearman test/data/*.$K.kdb | ./bin/kdb hierarchical
-./bin/kdb matrix Normalized test/data/*.%K.kdb | ./bin/kdb distance spearman [ /dev/stdin | STDIN ] | ./bin/kdb hierarchical
+kdb distance spearman test/data/*.$K.kdb | kdb hierarchical
+kdb matrix Normalized test/data/*.%K.kdb | kdb distance spearman [ /dev/stdin | STDIN ] | kdb hierarchical
 ```
 
 
@@ -282,7 +306,7 @@ parallel 'kdb profile -k $K {{}} {{.}}.$K.kdb' ::: $(/bin/ls test/data/*.fasta.g
 # This command uses ecopy to normalize between sample k-mer total counts before PCA/tSNE.
 # -n $N is the dimensionality of either PCA or tSNE. A good choice for tSNE is 2.
 # If the command is run with PCA without a selected dimensionality, an elbow graph
-# will be produced named '{0}'. Please use this graph to select
+# will be produced named 'PCA_variance_accumulation.png'. Please use this graph to select
 # the number of principal components to use.
 # The pipeline will not continue until -n $N is selected by the user.
 # It is not recommended to feed Unnormalized or Normalized matrices directly to 'kdb kmeans'
@@ -293,10 +317,10 @@ parallel 'kdb profile -k $K {{}} {{.}}.$K.kdb' ::: $(/bin/ls test/data/*.fasta.g
 # Please note the randomness parameter 'random_state=42' for sklearn's kmeans is fixed at 42.
 # Note here that the -k $K is not related to the choice of substring length 'k' for profile generation.
 # The 'kdb kmeans' command produces two figures, first is an elbow graph looking at up to N clusters.
-# This elbow graph will be written to '{1}'.
+# This elbow graph will be written to 'kmeans_elbow_graph.png'.
 # The second is the more typical scatterplot of the first two reduced dimensions
 # and the k-means clustering labels shown over the scatter.
-# This file will be written to '{2}'.
+# This file will be written to 'kmeans_clustering.png'.
 kdb matrix [-n $N] [ PCA | tSNE ] test/data/*.$K.kdb | kdb kmeans -k $K sklearn
 kdb matrix [-n $N] [ PCA | tSNE ] test/data/*.$K.kdb | kdb kmeans -k $K --distance e Biopython
 #
@@ -304,12 +328,6 @@ kdb matrix [-n $N] [ PCA | tSNE ] test/data/*.$K.kdb | kdb kmeans -k $K --distan
 # it is recommended that you consider gzip compressing it if it is the Normalized or Unnormalized matrix
 # which we will see is used downstream in the rarefaction and hierarchical analytics pathways.
 #
-##################
-# Rarefaction
-##################
-# The Unnormalized and Normalized matrices go to ecopy's rarefy function to produce a rarefaction plot
-# This plot will be written to '{3}'.
-kdb matrix [ Unnormalized | Normalized ] test/data/*.$K.kdb | kdb rarefy
 
 
 ##################
@@ -321,23 +339,23 @@ kdb matrix [ Unnormalized | Normalized ] test/data/*.$K.kdb | kdb rarefy
 # The third step (kdb hierarchical)  is to build a dendrogram with scipy.cluster.hierarchy.
 # This final step produces a plot in addition to the tsvs produced in the prior steps,
 # which can be captured as independent steps or with tee in a pipeline.
-kdb matrix [ Normalized ] test/data/*.$K.kdb | kdb distance spearman | kdb hiearchical
+# The hierarchical clustering figure is written out to 'dendrogram.png'
+kdb matrix [ Unnormalized | Normalized ] test/data/*.$K.kdb | kdb distance spearman | kdb hiearchical
 ```
 
 
 # Development
 
 
-[![PyPI version](https://img.shields.io/pypi/v/kdb.svg)][pip]
-[![Python versions](https://img.shields.io/pypi/pyversions/kdb.svg)][Pythons]
-[![Travis Build Status](https://travis-ci.org/MatthewRalston/kdb.svg?branch=master)](https://travis-ci.org/MatthewRalston/kdb)
-[![Coveralls code coverage](https://img.shields.io/coveralls/MatthewRalston/kdb/master.svg)][Coveralls]
+[![PyPI version](https://img.shields.io/pypi/v/kmerdb.svg)][pip]
+[![Python versions](https://img.shields.io/pypi/pyversions/kmerdb.svg)][Pythons]
+[![Travis Build Status](https://travis-ci.org/MatthewRalston/kmerdb.svg?branch=master)](https://travis-ci.org/MatthewRalston/kmerdb)
+[![Coveralls code coverage](https://coveralls.io/repos/github/MatthewRalston/kmerdb/badge.svg?branch=master)](https://coveralls.io/github/MatthewRalston/kmerdb?branch=master)
 [![ReadTheDocs status](https://readthedocs.org/projects/kdb/badge/?version=stable&style=flat)][RTD]
 
 
-[pip]: https://pypi.org/project/kdb/
-[Pythons]: https://pypi.org/project/kdb/
-[Coveralls]: https://coveralls.io/r/MatthewRalston/kdb?branch=master
+[pip]: https://pypi.org/project/kmerdb/
+[Pythons]: https://pypi.org/project/kmerdb/
 [RTD]: https://kdb.readthedocs.io/en/latest/
 
 ## Unit testing
@@ -349,10 +367,6 @@ The method for installation and unit tests in a new development environment can 
 ```bash
 python setup.py test
 ```
-
-
-
-
 
 
 
@@ -436,6 +450,6 @@ Thanks to Blahah for tolerating someone snooping and imitating his Ruby style.
 Thanks to Erin for getting my feet wet in this new field.
 Thanks to Rachel for the good memories and friendship.
 Thanks to Yasmeen for the usual banter.
-Thanks to Max, Robin, and Robert for the halfway decent memories in St. Louis.
+<!-- Thanks to Max, Robin, and Robert for the halfway decent memories in St. Louis. -->
 And thanks to my family and friends.
 Go Blue Hens 2021.
