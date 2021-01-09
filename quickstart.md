@@ -11,15 +11,15 @@ toc: true
 * [Introduction](#introduction)
 * [Install](#install)
 * [Usage](#usage)
-    * [kdb profile](#kdb-profile)
-    * [kdb view](#kdb-view)
-    * [kdb distance](#kdb-distance)
-    * [kdb matrix](#kdb-matrix)
-    * [kdb kmeans](#kdb-kmeans)
-    * [kdb rarefy](#kdb-rarefy)
+    * [kmerdb profile](#kmerdb-profile)
+    * [kmerdb view](#kmerdb-view)
+    * [kmerdb distance](#kmerdb-distance)
+    * [kmerdb matrix](#kmerdb-matrix)
+    * [kmerdb kmeans](#kmerdb-kmeans)
+	* [kmerdb hierarchical](#kmerdb-hierarchical)
+    * [kmerdb probability](#kmerdb-probability)
 * [Documentation](#documentation)
 * [Development](#development)
-    * [Unit testing](#unit-testing)
 * [API](#api)
     * [Importing](#importing)
     * [Reading](#reading)
@@ -32,7 +32,7 @@ toc: true
 
 ## What is `.kdb`?
 
-The K-mer database (.kdb) is a file format and command-line utility (CLI) for accessing precomputed k-mers from sequencing data. .kdb views k-mer graph databases as a fundamental technology to look at biological sequence identities and abundances. K-mer methods have been noted as fast and are used in areas from NGS quality control to phylogenomic investigations.
+The K-mer database (.kdb) is a file format, a minimal python module (kmerdb) and command-line utility (CLI) packaged together in a pip module, for accessing precomputed k-mers from sequencing data. .kdb views k-mer graph databases as a fundamental technology to look at biological sequence identities and abundances. K-mer methods have been noted as fast and are used in areas from NGS quality control to phylogenomic investigations.
 
 .kdb is based on the block GNU-zip file (bgzf) standard. Each .kdb file has a header or metadata section, much like .bam files. It is essentially a tab-delimited format with the last column unstructured for k-mer specific metadata. Input files and total k-mer counts are stored in the metadata block at the top of the file
 
@@ -83,7 +83,7 @@ See the [install](/installation) page for development install instructions.
 Use '-h' to view detailed usage information about the subcommands
 
 ```bash
->kdb -h
+>kmerdb -h
 usage: kdb [-h] {profile,header,view,matrix,rarefy,cluster,distance,index} ...
 
 positional arguments:
@@ -103,24 +103,24 @@ optional arguments:
   -h, --help            show this help message and exit
 ```
 
-## kdb profile
+## kmerdb profile
 
 A typical workflow first requires the generation of k-mer profiles. The following command will generate multiple profiles at `$K`-mer resolution simultaneously.
 
 ```bash
-parallel 'kdb profile -k $K {} {.}.$K.kdb' ::: $(/bin/ls test/data/*.fasta.gz)
+parallel 'kmerdb profile -k $K {} {.}.$K.kdb' ::: $(/bin/ls test/data/*.fasta.gz)
 ```
 
-## kdb view
+## kmerdb view
 
 As mentioned before under [KDB format](#kdb-is-a-file-format), the kdb file consists of a header or metadata section, followed by data blocks until the end of the file. The header is YAML formatted and the data blocks are formatted as tab-separated value files (.tsv), with the last/right-most column being a JSON formatted metadata column. For developers, the YAML schema can be found in the config.py file.
 ```bash
 # This should display the entire header of most files
 >zcat test/data/foo.12.kdb | head -n 30 
 # This will also display just the header
->kdb header test/data/foo.12.kdb
+>kmerdb header test/data/foo.12.kdb
 # The -H flag includes the header in the uncompressed output
->kdb view -H test/data/foo.12.kdb
+>kmerdb view -H test/data/foo.12.kdb
 version: 0.0.2
 metadata_blocks: 1
 k: 12
@@ -145,13 +145,13 @@ files:
 2       0
 ```
 
-## kdb distance
+## kmerdb distance
 
 Suppose you want a distance matrix between profiles; this is made easy with the distance command. The distance command supports all distance metrics used by `scipy.spatial.distance.pdist` to create the distance matrix/DataFrame and print it to STDOUT.
 
 ```bash
->kdb distance -h
-usage: kdb distance [-h] [-v] [--output-delimiter OUTPUT_DELIMITER]
+>kmerdb distance -h
+usage: kmerdb distance [-h] [-v] [--output-delimiter OUTPUT_DELIMITER]
                     [-d DELIMITER] [-k K]
                     {braycurtis,canberra,chebyshev,cityblock,correlation,cosine,dice,euclidean,hamming,jaccard,jensenshannon,kulsinski,mahalanobis,matching,minkowski,rogerstanimotorusselrao,seuclidean,sokalmichener,sokalsneath,spearman,sqeuclidean,yule}
                     <kdbfile1 kdbfile2 ...> [<kdbfile1 kdbfile2 ...> ...]
@@ -171,21 +171,21 @@ optional arguments:
                         The delimiter to use when printing the csv.
   -k K                  The k-dimension that the files have in common
 
->kdb distance spearman test/data/*.$K.kdb
->kdb distance correlation test/data/*.$K.kdb # Actually the Pearson correlation coefficient
+>kmerdb distance spearman test/data/*.$K.kdb
+>kmerdb distance correlation test/data/*.$K.kdb # Actually the Pearson correlation coefficient
 ```
 
 The result is a symmetric matrix in tsv format with column headers formed from the filenames minus their extensions. It is presumed that to properly analyze the distance matrix, you would name the files after their sample name or their species, or some other identifying features. This naming convention holds for the `kdb matrix` command as well.
 
 
 
-## kdb matrix
+## kmerdb matrix
 
-The kdb matrix command generates the count matrix either un-normalized, normalized (via ecopy), or with PCA or t-SNE dimensionality reduction applied. Note that default behavior of PCA if -n is not specified is to generate an elbow graph for the user to pick the appropriate choice of principal components for downstream analyses. The -n parameter is passed to the n_components parameter of sklearn.decomposition.PCA, which is commonly used for PCA in Python.
+The kmerdb matrix command generates the count matrix either un-normalized, normalized (via DESeq2), or with PCA or t-SNE dimensionality reduction applied. Note that default behavior of PCA if -n is not specified is to generate an elbow graph for the user to pick the appropriate choice of principal components for downstream analyses. The -n parameter is passed to the n_components parameter of sklearn.decomposition.PCA, which is commonly used for PCA in Python.
 
 ```bash
->kdb matrix -h
-usage: kdb matrix [-h] [-v] [-k K] [-n N] [-d DELIMITER]
+>kmerdb matrix -h
+usage: kmerdb matrix [-h] [-v] [-k K] [-n N] [-d DELIMITER]
                   [--perplexity PERPLEXITY]
                   {PCA,tSNE,Normalized,Unnormalized} <.kdb> [<.kdb> ...]
 
@@ -207,26 +207,26 @@ optional arguments:
                         The choice of the perplexity for t-SNE based
                         dimensionality reduction
 
->kdb matrix -n 3 PCA test/data/*.$K.kdb
+>kmerdb matrix -n 3 PCA test/data/*.$K.kdb
 ```
 
 
-## kdb kmeans
+## kmerdb kmeans
 
 Now you would like to cluster your count matrix, perhaps after reducing dimensionality of the dataset. tSNE is a recommended choice for using the count matrix to differentiate between strains or species. PCA is equally useful in understanding the differences between species and reducing the dimensionality to something reasonable is an important first step before clustering.
 
 
 ```bash
 # You may supply any arbitrary count tsv to cluster, and it will run that directly.
->kdb kmeans -k 3 sklearn example.tsv
+>kmerdb kmeans -k 3 sklearn example.tsv
 
 # Alternatively, you may pipe the result from kdb matrix directly to kdb cluster.
 # The matrix command will not produce PCA reduced dimension matrix unless the -n parameter
 # is identified from the elbow graph it will produce as a side effect.
->kdb matrix PCA -n 3 test/data/*.$K.kdb | kdb kmeans -k 3 sklearn
+>kmerdb matrix PCA -n 3 test/data/*.$K.kdb | kmerdb kmeans -k 3 sklearn
 
 # Alternatively, t-SNE may be used to project the data into 2 dimensions for visualization.
->kdb matrix tSNE -n 2 test/data/*.$K.kdb | ./bin/kdb cluster -k 3 Biopython
+>kmerdb matrix tSNE -n 2 test/data/*.$K.kdb | kmerdb kmeans -k 3 Biopython
 ```
 
 <!--
@@ -245,21 +245,65 @@ Suppose you want supply a normalized matrix directly to [ecopy](https://github.c
 -->
 
 
-## kdb hierarchical
+## kmerdb hierarchical
 
 Now you might want to use hierarchical clustering on a distance matrix for example.
 
 ```bash
 # You may run the distance command with either direct kdb input or a count matrix
-kdb distance spearman test/data/*.$K.kdb | kdb hierarchical
-kdb matrix Normalized test/data/*.%K.kdb | kdb distance spearman [ /dev/stdin | STDIN ] | kdb hierarchical
+kmerdb distance spearman test/data/*.$K.kdb | kmerdb hierarchical
+kmerdb matrix Normalized test/data/*.%K.kdb | kmerdb distance spearman [ /dev/stdin | STDIN ] | kmerdb hierarchical
 ```
+
+## kmerdb probability
+
+Calculate Markov chain probabilities from 
+
+The following is equation 3.2 from p. 48 of reference 1.
+
+<img src="https://render.githubusercontent.com/render/math?math=p(x) = P(X_{1})\prod_{i=2}^{N-k} a_{X_{i-1}X_{i}}">
+
+where x is the full sequence, X1 is the first k-mer subsequence of x, and a is the transition probability from X<sub>i-1</sub> to X<sub>i</sub> specified by the extension of equation 3.1 and 3.3 in p. 48-50.
+
+<img src="https://render.githubusercontent.com/render/math?math=a_{st} = q_{t}/\sum_{c=1}^{4} q_{s_{c}}">
+
+where c is one of the four possible suffixes prior to transition, q<sub>t</sub> is the frequency of the suffix transitioned to, q<sub>s</sub> are frequencies of each possible suffix.
+
+
+I also must note the following equation I have had on my noteboard for about 12 months. The note at the bottom of the chalkboard says "take the log of both sides, since both represent the odds ratio.
+
+<img src="https://render.githubusercontent.com/render/math?math=\frac{P(x|N)}{P(x|R)} = \frac{ p(x_{1}|N)\prod_{i=2}^{N-k} a_{X_{i-1}X_{i}} }{ p(x_{1}|R)\prod_{i=2}^{N-k} a_{ij} }">
+
+Note that the a<sub>ij</sub> may be estimated from their maximum likelihood estimators for a first order markov model with a uniform random prior.
+
+Then we log-transform the whole thing for a log-odds ratio test.
+
+<img src="https://render.githubusercontent.com/render/math?math=\log10 \frac{P(x|N)}{P(x|R)} = \frac{ \log10 p(x_{1}|N) %2B \sum_{i=2}^{N-k} \log10 (a_{X_{i-1}X{i}}) }{ \log10 p(x_{1}|R) %2B \sum_{i=2}^{N-k} \log10 a_{ij} }">
+
+The a<sub>ij</sub> will be further specified as follows. Each a<sub>ij</sub> is the frequency of the letter representing the transition in a first order Markov model
+
+<img src="https://render.githubusercontent.com/render/math?math=P(x|R) = p(x_{1})\prod_{i=2}^{N-k} a_{ij}">
+
+<img src="https://render.githubusercontent.com/render/math?math=\log10 P(x|R) = \log10 p(x_{1}) %2B \sum_{i=2}^{N-k} \log10 a_{ij}">
+
+
+```bash
+# This will create a tsv of probabilities and log-odds ratios.
+kmerdb probability input.fasta example.kdb example.kdbi
+```
+
+
+
+
+
+1. Durbin, R., Eddy, S.R., Krogh, A. and Mitchison, G., 1998. Biological sequence analysis: probabilistic models of proteins and nucleic acids. Cambridge university press.
+
 
 
 # Documentation
 
 
-Documentation for the (sub)module can be found here: [https://kdb.readthedocs.io/en/stable](https://kdb.readthedocs.io/en/stable)
+Documentation for the (sub)module can be found here: [https://kdb.readthedocs.io/en/latest](https://kdb.readthedocs.io/en/latest)
 
 Additionally, running the distance, matrix, kmeans, or rarefy commands (which are arguably more complex in their usage) should be run with the DEBUG (-vv) verbosity setting on. This will yield additional information about the expected pipeline usage. That statement is echoed here.
 
