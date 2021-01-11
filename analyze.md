@@ -13,4 +13,6 @@ I encourage you to check out the [CLI documentation](/quickstart#usage) for deta
 
 Also, please take a look at [the example_report README.md](https://github.com/MatthewRalston/kmerdb/tree/master/examples/example_report) for more details about how to populate the report with metadata about an analysis of samples via kdb.
 
-And finally, please check out the template [index.Rmd](https://github.com/MatthewRalston/kmerdb/blob/master/examples/example_report/index.Rmd) for information about the statistical analyses performed and how these become the primary index.html page for the results.
+Then, please check out the template [index.Rmd](https://github.com/MatthewRalston/kmerdb/blob/master/examples/example_report/index.Rmd) for information about the statistical analyses performed and how these become the primary index.html page for the results.
+
+And finally, please check out the [finished report](https://github.com/MatthewRalston/kmerdb/blob/master/examples/example_report/index.pdf).

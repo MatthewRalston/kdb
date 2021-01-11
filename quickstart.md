@@ -263,9 +263,9 @@ The following is equation 3.2 from p. 48 of reference 1.
 
 <img src="https://render.githubusercontent.com/render/math?math=p(x) = P(X_{1})\prod_{i=2}^{N-k} a_{X_{i-1}X_{i}}">
 
-where x is the full sequence, X1 is the first k-mer subsequence of x, and a is the transition probability from X<sub>i-1</sub> to X<sub>i</sub> specified by the extension of equation 3.1 and 3.3 in p. 48-50.
+where x is the full sequence, X<sub>1</sub> is the first k-mer subsequence of x, and a is the transition probability from X<sub>i-1</sub> to X<sub>i</sub> specified by the extension of equation 3.1 and 3.3 in p. 48-50.
 
-<img src="https://render.githubusercontent.com/render/math?math=a_{st} = q_{t}/\sum_{c=1}^{4} q_{s_{c}}">
+<img src="https://render.githubusercontent.com/render/math?math=a_{st} = \frac{q_{t}}{\sum_{c=1}^{4} q_{s_{c}}}">
 
 where c is one of the four possible suffixes prior to transition, q<sub>t</sub> is the frequency of the suffix transitioned to, q<sub>s</sub> are frequencies of each possible suffix.
 
