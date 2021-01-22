@@ -84,28 +84,60 @@ Use '-h' to view detailed usage information about the subcommands
 
 ```bash
 >kmerdb -h
-usage: kdb [-h] {profile,header,view,matrix,rarefy,cluster,distance,index} ...
+usage: kmerdb [-h] {profile,header,view,matrix,kmeans,hierarchical,distance,index,shuf,probability,citation} ...
 
 positional arguments:
-  {profile,header,view,matrix,rarefy,cluster,distance,index}
-                        Use --help with sub-commands
-    profile             Parse data into the database from one or more sequence
-                        files
-    header              Print the YAML header of the .kdb file and exit
-    view                View the contents of the .kdb file
-    matrix              Generate a reduced-dimensionality matrix of the n *
-                        4^k (sample x k-mer) data matrix.
-    kmeans              Cluster the files according to their k-mer profile
-    distance            Calculate various distance metrics between profiles
-    index               Create a index file that can be held in memory
+{profile,header,view,matrix,kmeans,hierarchical,distance,index,shuf,probability,citation}
+Use --help with sub-commands
+profile             Parse data into the database from one or more sequence files
+header              Print the YAML header of the .kdb file and exit
+view                View the contents of the .kdb file
+matrix              Generate a reduced-dimensionality matrix of the n * 4^k (sample x k-mer) data matrix.
+kmeans              Cluster the files according to their k-mer profile
+hierarchical        Use scipy.cluster.hierarchy to generate a dendrogram from a distance matrix
+distance            Calculate various distance metrics between profiles
+index               Create a index file that can be held in memory
+shuf                Create a shuffled .kdb file
+probability         Calculate the log-odds ratio of the Markov probability of a given sequence from the product (pi) of the transition probabilities(aij) times the frequency of the first k-mer (P(X1)),
+given the entire k-mer profile of a species. See https://matthewralston.github.io/quickstart#kmerdb-probability for more details. 1. Durbin, R., Eddy, S.R., Krogh, A. and Mitchison, G.,
+1998. Biological sequence analysis: probabilistic models of proteins and nucleic acids. Cambridge university press.
+citation            Silence the citation notice on further runs
 
 optional arguments:
-  -h, --help            show this help message and exit
+-h, --help            show this help message and exit
 ```
 
 ## kmerdb profile
 
-A typical workflow first requires the generation of k-mer profiles. The following command will generate multiple profiles at `$K`-mer resolution simultaneously.
+A typical workflow first requires the generation of k-mer profiles. Complete metadata for each k-mer can be saved to the same database with `--all-metadata`. Note that this could cause significant increases in file size depending on the total k-mer coverage and the sequencing complexity. It is not recommended to experiment with `--all-metadata` at this time. Instead, we focus our attention on the numbers rather than the graph structure. Note that while individual profiles may be composite (i.e. you could mimic your own metagenomic compositions with downsampled fastq files to adjust proportions), the counts are stored in aggregate. 
+
+```bash
+usage: kmerdb profile [-h] [-v] [-p {1,2,3,4,...}] [-b FASTQ_BLOCK_SIZE] [-n N]
+[--strand-specific] [--all-metadata] [--sparse] [-k K]
+<.fasta|.fastq> [<.fasta|.fastq> ...] kdb
+
+positional arguments:
+<.fasta|.fastq>       Fasta or fastq files
+kdb                   Kdb file
+
+optional arguments:
+-h, --help            show this help message and exit
+-v, --verbose         Prints warnings to the console by default
+-p {1,2,3,4,...}
+Shred k-mers from reads in parallel
+-b FASTQ_BLOCK_SIZE, --fastq-block-size FASTQ_BLOCK_SIZE
+Number of reads to load in memory at once for processing
+-n N                  Number of k-mer metadata records to keep in memory at once before transactions are submitted, this is a space limitation parameter after the initial block of reads is parsed. And during
+on-disk database generation
+--strand-specific     Retain k-mers from the forward strand of the fast(a|q) file only
+--all-metadata        Include read-level k-mer metadata in the .kdb
+--sparse              Whether or not to store the profile as sparse
+  -k K                  Choose k-mer size (Default: 12)
+
+```
+
+
+The following command will generate multiple profiles at `$K`-mer resolution simultaneously. We have included 11 bacterial genomes under test/data for the user to explore. The following command, though in parallel, is applied to a single file, and thus represents the k-mer profile of the single file. 
 
 ```bash
 parallel 'kmerdb profile -k $K {} {.}.$K.kdb' ::: $(/bin/ls test/data/*.fasta.gz)
@@ -143,6 +175,7 @@ files:
 0       4
 1       1
 2       0
+...
 ```
 
 ## kmerdb distance
@@ -286,13 +319,32 @@ The a<sub>ij</sub> will be further specified as follows. Each a<sub>ij</sub> is 
 
 <img src="https://render.githubusercontent.com/render/math?math=\log10 P(x|R) = \log10 p(x_{1}) %2B \sum_{i=2}^{N-k} \log10 a_{ij}">
 
+The meaning of three transition probability notations is as follows: a<sub>ij</sub> and a<sub>st</sub> and a<sub>Xi-1,Xi</sub> 
+
+1. a<sub>st</sub>
+
+The more generic form of a transition probability in general, the idea of the ratio of a specific frequency of an output sequence compared to all of the other 4 possible output states/nodes or whatever you want to refer to the states as in the Markov model, with respect to the prefix k-1mer that q<sub>t</sub> shares with each q<sub>sc</sub>, where c represents one other possible output states, as a single base on the end of the growing Markov chain.
+
+2. a<sub>ij</sub>
+
+A specific transition probability from k-mer i to k-mer j out of the L-k+1 k-mers of the input sequence, as modeled by the NULL model:
+
+In this case, q<sub>t</sub> is the uniform random probability of a k-mer, namely the number of k-mers (proportional library size) divided by the number of possible k-mers (4<sup>k</sup>).
+
+Then, for the actual model of the choice of state change, we add  the frequencies of the possible output sequences, which in the simplest first-order null model are the mononucleotide frequencies.
+
+3. a<sub>Xi-1,Xi</sub>
+
+The same transition probability as above, but under the ALTERNATIVE model. In our model, we use the frequency of the 1st/0th observed k-mer, P(X1|R) = q<sub>X1</sub> to initialize the Markov chain.
+
+Then, we use the observed frequencies of each outgoing state change as the denominator as before, to represent the first order state changes.
+
+
 
 ```bash
 # This will create a tsv of probabilities and log-odds ratios.
 kmerdb probability input.fasta example.kdb example.kdbi
 ```
-
-
 
 
 
